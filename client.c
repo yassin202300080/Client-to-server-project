@@ -32,7 +32,9 @@ int main() {
     }
 
     // Send message to server
-    char *message = "Hello from client";
+    char message[BUFFER_SIZE];
+    printf("Enter message to send: ");
+    fgets(message, sizeof(message), stdin);
     send(sock, message, strlen(message), 0);
 
     // Receive response from server
