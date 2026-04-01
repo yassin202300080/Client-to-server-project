@@ -6,6 +6,7 @@
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
+#define PSK "secretkey146"
 
 int main() {
     int sock;
@@ -30,6 +31,21 @@ int main() {
         perror("Connection failed");
         exit(EXIT_FAILURE);
     }
+
+    //authentication
+    send(sock, PSK, strlen(PSK), 0);
+    read(sock, buffer, BUFFER_SIZE);
+
+    if (strcmp(buffer, "AUTH_OK") != 0) {
+        printf("[-] Server rejected the authentication.\n");
+        close(sock);
+        return 1;
+    }
+    
+    printf("[+] Authenticated with the server.\n");
+
+    // Clear buffer for the next message
+    memset(buffer, 0, BUFFER_SIZE);
 
     // Send message to server
     char message[BUFFER_SIZE];
