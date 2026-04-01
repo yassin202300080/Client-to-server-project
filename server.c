@@ -7,7 +7,14 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 #define PSK "secretkey146"
+#define KEY 'X'
 
+//xor encryption and decryption function
+void encrypt_decrypt(char *data, int len) {
+    for (int i = 0; i < len; i++) {
+        data[i] ^= KEY;
+    }
+}
 int main() {
     int server_fd, new_socket;
     struct sockaddr_in address;
@@ -48,25 +55,44 @@ int main() {
     }
 
     //Authentication using psk
-read(new_socket, buffer, BUFFER_SIZE);
+int auth_len = read(new_socket, buffer, BUFFER_SIZE);
+encrypt_decrypt(buffer, auth_len);
+buffer[auth_len] = '\0';
 
 if (strcmp(buffer, PSK) == 0) {
         printf("[+] authenticated successful.\n");
-        send(new_socket, "AUTH_OK", 7, 0);
+        char auth_ok[] = "AUTH_OK";
+        encrypt_decrypt(auth_ok, strlen(auth_ok));
+        send(new_socket, auth_ok, strlen(auth_ok), 0);
     } else {
         printf("[-] Authentication failed.\n");
-        send(new_socket, "AUTH_FAIL", 9, 0);
+        char auth_fail[] = "AUTH_FAIL";
+        encrypt_decrypt(auth_fail, strlen(auth_fail));
+        send(new_socket, auth_fail, strlen(auth_fail), 0);
         close(new_socket);
         close(server_fd);
         return 1;
     }
 //Clear buffer for the next message
     memset(buffer, 0, BUFFER_SIZE);
+    int valread = read(new_socket, buffer, BUFFER_SIZE);
+
+    //printing encrypted message from server
+    printf("Encrypted message from server: %s\n", buffer);
+
+    //printing decrypted message from server
+    encrypt_decrypt(buffer, valread);
+    printf("Decrypted message from server: %s\n", buffer);
+
 
     // Receive and respond to client message
-    read(new_socket, buffer, BUFFER_SIZE);
+    int msg_len = read(new_socket, buffer, BUFFER_SIZE);
+    encrypt_decrypt(buffer, msg_len);
+    buffer[msg_len] = '\0';
     printf("Client: %s\n", buffer);
-    send(new_socket, "Hello from server", strlen("Hello from server"), 0);
+    char reply[] = "Hello from server";
+    encrypt_decrypt(reply, strlen(reply));
+    send(new_socket, reply, strlen(reply), 0);
 
     // Close sockets
     close(new_socket);

@@ -7,6 +7,14 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 #define PSK "secretkey146"
+#define KEY 'X'
+
+//xor encryption and decryption function
+void encrypt_decrypt(char *data, int len) {
+    for (int i = 0; i < len; i++) {
+        data[i] ^= KEY;
+    }
+}
 
 int main() {
     int sock;
@@ -33,8 +41,13 @@ int main() {
     }
 
     //authentication
-    send(sock, PSK, strlen(PSK), 0);
-    read(sock, buffer, BUFFER_SIZE);
+    char psk_buffer[BUFFER_SIZE];
+    strcpy(psk_buffer, PSK);
+    encrypt_decrypt(psk_buffer, strlen(psk_buffer));
+    send(sock, psk_buffer, strlen(psk_buffer), 0);
+    int auth_len = read(sock, buffer, BUFFER_SIZE);
+    encrypt_decrypt(buffer, auth_len);
+    buffer[auth_len] = '\0';
 
     if (strcmp(buffer, "AUTH_OK") != 0) {
         printf("[-] Server rejected the authentication.\n");
@@ -51,10 +64,13 @@ int main() {
     char message[BUFFER_SIZE];
     printf("Enter message to send: ");
     fgets(message, sizeof(message), stdin);
+    encrypt_decrypt(message, strlen(message));
     send(sock, message, strlen(message), 0);
 
     // Receive response from server
-    read(sock, buffer, BUFFER_SIZE);
+    int response_len = read(sock, buffer, BUFFER_SIZE);
+    encrypt_decrypt(buffer, response_len);
+    buffer[response_len] = '\0';
     printf("Server: %s\n", buffer);
 
     // Close socket
