@@ -77,17 +77,16 @@ if (strcmp(buffer, PSK) == 0) {
     memset(buffer, 0, BUFFER_SIZE);
     int valread = read(new_socket, buffer, BUFFER_SIZE);
 
-    //printing encrypted message from server
-    printf("Encrypted message from server: %s\n", buffer);
+    //printing encrypted message from client
+    printf("Encrypted message from client: %s\n", buffer);
 
-    //printing decrypted message from server
+    //printing decrypted message from client
     encrypt_decrypt(buffer, valread);
-    printf("Decrypted message from server: %s\n", buffer);
+    printf("Decrypted message from client: %s\n", buffer);
 
 
     // Receive and respond to client message
-    int msg_len = read(new_socket, buffer, BUFFER_SIZE);
-    encrypt_decrypt(buffer, msg_len);
+    int msg_len = valread;
     buffer[msg_len] = '\0';
     printf("Client: %s\n", buffer);
     char reply[] = "Hello from server";
