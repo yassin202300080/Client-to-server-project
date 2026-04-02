@@ -6,7 +6,6 @@
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define PSK "secretkey146"
 #define KEY 'X'
 
 //xor encryption and decryption function
@@ -15,6 +14,27 @@ void encrypt_decrypt(char *data, int len) {
         data[i] ^= KEY;
     }
 }
+
+int authenticate_user(const char *username, const char *password) {
+    FILE *users_file = fopen("users.txt", "r");
+    if (users_file == NULL) {
+        perror("Could not open users.txt");
+        return 0;
+    }
+
+    char file_username[50];
+    char file_password[50];
+    while (fscanf(users_file, "%49s %49s", file_username, file_password) == 2) {
+        if (strcmp(username, file_username) == 0 && strcmp(password, file_password) == 0) {
+            fclose(users_file);
+            return 1;
+        }
+    }
+
+    fclose(users_file);
+    return 0;
+}
+
 int main() {
     int server_fd, new_socket;
     struct sockaddr_in address;
@@ -54,25 +74,33 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    //Authentication using psk
-int auth_len = read(new_socket, buffer, BUFFER_SIZE);
-encrypt_decrypt(buffer, auth_len);
-buffer[auth_len] = '\0';
+    // Receive encrypted username:password
+    int auth_len = read(new_socket, buffer, BUFFER_SIZE);
+    if (auth_len <= 0) {
+        printf("[-] No authentication data received.\n");
+        close(new_socket);
+        close(server_fd);
+        return 0;
+    }
+    encrypt_decrypt(buffer, auth_len);
+    buffer[auth_len] = '\0';
 
-if (strcmp(buffer, PSK) == 0) {
-        printf("[+] authenticated successful.\n");
-        char auth_ok[] = "AUTH_OK";
-        encrypt_decrypt(auth_ok, strlen(auth_ok));
-        send(new_socket, auth_ok, strlen(auth_ok), 0);
-    } else {
-        printf("[-] Authentication failed.\n");
+    char username[50];
+    char password[50];
+    if (sscanf(buffer, "%49[^:]:%49s", username, password) != 2 || !authenticate_user(username, password)) {
+        printf("[-] Client authentication failed.\n");
         char auth_fail[] = "AUTH_FAIL";
         encrypt_decrypt(auth_fail, strlen(auth_fail));
         send(new_socket, auth_fail, strlen(auth_fail), 0);
         close(new_socket);
         close(server_fd);
-        return 1;
+        return 0;
     }
+
+    printf("[+] Client authenticated successfully: %s\n", username);
+    char auth_ok[] = "AUTH_OK";
+    encrypt_decrypt(auth_ok, strlen(auth_ok));
+    send(new_socket, auth_ok, strlen(auth_ok), 0);
 //Clear buffer for the next message
     memset(buffer, 0, BUFFER_SIZE);
     int valread = read(new_socket, buffer, BUFFER_SIZE);

@@ -6,7 +6,6 @@
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define PSK "secretkey146"
 #define KEY 'X'
 
 //xor encryption and decryption function
