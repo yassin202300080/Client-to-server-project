@@ -3,22 +3,42 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <openssl/evp.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define KEY 'X'
+#define KEY "1234567890123456"
+#define IV  "1234567890123456"
 
-//xor encryption and decryption function
-void encrypt_decrypt(char *data, int len) {
-    for (int i = 0; i < len; i++) {
-        data[i] ^= KEY;
-    }
+int aes_encrypt(unsigned char *plaintext, int plain_len, unsigned char *ciphertext) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    int len, cipher_len;
+    EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, (unsigned char *)KEY, (unsigned char *)IV);
+    EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plain_len);
+    cipher_len = len;
+    EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
+    cipher_len += len;
+    EVP_CIPHER_CTX_free(ctx);
+    return cipher_len;
+}
+
+int aes_decrypt(unsigned char *ciphertext, int cipher_len, unsigned char *plaintext) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    int len, plain_len;
+    EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, (unsigned char *)KEY, (unsigned char *)IV);
+    EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, cipher_len);
+    plain_len = len;
+    EVP_DecryptFinal_ex(ctx, plaintext + len, &len);
+    plain_len += len;
+    EVP_CIPHER_CTX_free(ctx);
+    return plain_len;
 }
 
 int main() {
     int sock;
     struct sockaddr_in server_address;
     char buffer[BUFFER_SIZE] = {0};
+    unsigned char encrypted[BUFFER_SIZE] = {0};
 
     // Create socket
     sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -50,13 +70,13 @@ int main() {
     getchar(); 
 // Combine username and password into a single string and encrypt it before sending to the server
     snprintf(credentials, sizeof(credentials), "%s:%s", username, password);
-    encrypt_decrypt(credentials, strlen(credentials));
-    send(sock, credentials, strlen(credentials), 0);
+    int enc_len = aes_encrypt((unsigned char *)credentials, strlen(credentials), encrypted);
+    send(sock, encrypted, enc_len, 0);
 
     //read server response
     int auth_len = read(sock, buffer, BUFFER_SIZE);
-    encrypt_decrypt(buffer, auth_len);
-    buffer[auth_len] = '\0';
+    int dec_len = aes_decrypt((unsigned char *)buffer, auth_len, (unsigned char *)buffer);
+    buffer[dec_len] = '\0';
 
     if (strcmp(buffer, "AUTH_OK") != 0) {
         printf("[-] Server rejected the authentication.\n");
@@ -70,13 +90,13 @@ int main() {
     char message[BUFFER_SIZE];
     printf("Enter message to send: ");
     fgets(message, sizeof(message), stdin);
-    encrypt_decrypt(message, strlen(message));
-    send(sock, message, strlen(message), 0);
+    enc_len = aes_encrypt((unsigned char *)message, strlen(message), encrypted);
+    send(sock, encrypted, enc_len, 0);
 
     // Receive response from server
     int response_len = read(sock, buffer, BUFFER_SIZE);
-    encrypt_decrypt(buffer, response_len);
-    buffer[response_len] = '\0';
+    dec_len = aes_decrypt((unsigned char *)buffer, response_len, (unsigned char *)buffer);
+    buffer[dec_len] = '\0';
     printf("Server: %s\n", buffer);
 
     // Close socket

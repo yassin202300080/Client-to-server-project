@@ -3,127 +3,98 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <openssl/evp.h>
 
 #define PORT 8080
 #define BUFFER_SIZE 1024
-#define KEY 'X'
+#define KEY "1234567890123456"
+#define IV  "1234567890123456"
 
-//xor encryption and decryption function
-void encrypt_decrypt(char *data, int len) {
-    for (int i = 0; i < len; i++) {
-        data[i] ^= KEY;
-    }
+int aes_encrypt(unsigned char *plain, int plain_len, unsigned char *cipher) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, KEY, IV);
+    int len, cipher_len = 0;
+    EVP_EncryptUpdate(ctx, cipher, &len, plain, plain_len);
+    cipher_len = len;
+    EVP_EncryptFinal_ex(ctx, cipher + len, &len);
+    cipher_len += len;
+    EVP_CIPHER_CTX_free(ctx);
+    return cipher_len;
 }
 
-int authenticate_user(const char *username, const char *password) {
-    FILE *users_file = fopen("users.txt", "r");
-    if (users_file == NULL) {
-        perror("Could not open users.txt");
-        return 0;
-    }
+int aes_decrypt(unsigned char *cipher, int cipher_len, unsigned char *plain) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, KEY, IV);
+    int len, plain_len = 0;
+    EVP_DecryptUpdate(ctx, plain, &len, cipher, cipher_len);
+    plain_len = len;
+    EVP_DecryptFinal_ex(ctx, plain + len, &len);
+    plain_len += len;
+    EVP_CIPHER_CTX_free(ctx);
+    return plain_len;
+}
 
-    char file_username[50];
-    char file_password[50];
-    while (fscanf(users_file, "%49s %49s", file_username, file_password) == 2) {
-        if (strcmp(username, file_username) == 0 && strcmp(password, file_password) == 0) {
-            fclose(users_file);
+int authenticate(const char *user, const char *pass) {
+    FILE *f = fopen("users.txt", "r");
+    if (!f) return 0;
+    char u[50], p[50];
+    while (fscanf(f, "%49s %49s", u, p) == 2)
+        if (strcmp(user, u) == 0 && strcmp(pass, p) == 0) {
+            fclose(f);
             return 1;
         }
-    }
-
-    fclose(users_file);
+    fclose(f);
     return 0;
 }
 
 int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
+    int server_fd, client_sock;
+    struct sockaddr_in addr;
+    int addrlen = sizeof(addr);
     char buffer[BUFFER_SIZE] = {0};
+    unsigned char encrypted[BUFFER_SIZE];
 
-    // Create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd == 0) {
-        perror("Socket failed");
-        exit(EXIT_FAILURE);
-    }
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(PORT);
+    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
+    listen(server_fd, 3);
+    printf("Listening on port %d...\n", PORT);
 
-    // Define server address
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(PORT);
+    client_sock = accept(server_fd, (struct sockaddr*)&addr, (socklen_t*)&addrlen);
 
-    // Bind the socket
-    if (bind(server_fd, (struct sockaddr*)&address, sizeof(address)) < 0) {
-        perror("Bind failed");
-        exit(EXIT_FAILURE);
-    }
+    int auth_len = read(client_sock, buffer, BUFFER_SIZE);
+    int dec_len = aes_decrypt((unsigned char*)buffer, auth_len, (unsigned char*)buffer);
+    buffer[dec_len] = '\0';
 
-    // Listen for incoming connections
-    if (listen(server_fd, 3) < 0) {
-        perror("Listen failed");
-        exit(EXIT_FAILURE);
-    }
+    char user[50], pass[50];
+    sscanf(buffer, "%49[^:]:%49s", user, pass);
 
-    printf("Server listening on port %d...\n", PORT);
-
-    // Accept a client connection
-    new_socket = accept(server_fd, (struct sockaddr*)&address, (socklen_t*)&addrlen);
-    if (new_socket < 0) {
-        perror("Accept failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Receive encrypted username:password
-    int auth_len = read(new_socket, buffer, BUFFER_SIZE);
-    if (auth_len <= 0) {
-        printf("[-] No authentication data received.\n");
-        close(new_socket);
-        close(server_fd);
-        return 0;
-    }
-    encrypt_decrypt(buffer, auth_len);
-    buffer[auth_len] = '\0';
-
-    char username[50];
-    char password[50];
-    if (sscanf(buffer, "%49[^:]:%49s", username, password) != 2 || !authenticate_user(username, password)) {
-        printf("[-] Client authentication failed.\n");
-        char auth_fail[] = "AUTH_FAIL";
-        encrypt_decrypt(auth_fail, strlen(auth_fail));
-        send(new_socket, auth_fail, strlen(auth_fail), 0);
-        close(new_socket);
-        close(server_fd);
+    if (!authenticate(user, pass)) {
+        char fail[] = "AUTH_FAIL";
+        int enc_len = aes_encrypt((unsigned char*)fail, strlen(fail), encrypted);
+        send(client_sock, encrypted, enc_len, 0);
+        close(client_sock); close(server_fd);
         return 0;
     }
 
-    printf("[+] Client authenticated successfully: %s\n", username);
+    printf("Authenticated: %s\n", user);
     char auth_ok[] = "AUTH_OK";
-    encrypt_decrypt(auth_ok, strlen(auth_ok));
-    send(new_socket, auth_ok, strlen(auth_ok), 0);
-//Clear buffer for the next message
+    int enc_len = aes_encrypt((unsigned char*)auth_ok, strlen(auth_ok), encrypted);
+    send(client_sock, encrypted, enc_len, 0);
+
     memset(buffer, 0, BUFFER_SIZE);
-    int valread = read(new_socket, buffer, BUFFER_SIZE);
-
-    //printing encrypted message from client
-    printf("Encrypted message from client: %s\n", buffer);
-
-    //printing decrypted message from client
-    encrypt_decrypt(buffer, valread);
-    printf("Decrypted message from client: %s\n", buffer);
-
-
-    // Receive and respond to client message
-    int msg_len = valread;
-    buffer[msg_len] = '\0';
+    int msg_len = read(client_sock, buffer, BUFFER_SIZE);
+    dec_len = aes_decrypt((unsigned char*)buffer, msg_len, (unsigned char*)buffer);
+    buffer[dec_len] = '\0';
     printf("Client: %s\n", buffer);
+
     char reply[] = "Hello from server";
-    encrypt_decrypt(reply, strlen(reply));
-    send(new_socket, reply, strlen(reply), 0);
+    enc_len = aes_encrypt((unsigned char*)reply, strlen(reply), encrypted);
+    send(client_sock, encrypted, enc_len, 0);
 
-    // Close sockets
-    close(new_socket);
+    close(client_sock);
     close(server_fd);
-
     return 0;
 }
