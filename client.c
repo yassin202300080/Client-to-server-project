@@ -40,11 +40,21 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    //authentication
-    char psk_buffer[BUFFER_SIZE];
-    strcpy(psk_buffer, PSK);
-    encrypt_decrypt(psk_buffer, strlen(psk_buffer));
-    send(sock, psk_buffer, strlen(psk_buffer), 0);
+    //user authentication 
+    char username[50], password[50], credentials[100];
+    
+    printf("Enter username: ");
+    scanf("%49s", username);
+    printf("Enter password: ");
+    scanf("%49s", password);
+
+    getchar(); 
+// Combine username and password into a single string and encrypt it before sending to the server
+    snprintf(credentials, sizeof(credentials), "%s:%s", username, password);
+    encrypt_decrypt(credentials, strlen(credentials));
+    send(sock, credentials, strlen(credentials), 0);
+
+    //read server response
     int auth_len = read(sock, buffer, BUFFER_SIZE);
     encrypt_decrypt(buffer, auth_len);
     buffer[auth_len] = '\0';
@@ -54,11 +64,8 @@ int main() {
         close(sock);
         return 1;
     }
-    
-    printf("[+] Authenticated with the server.\n");
 
-    // Clear buffer for the next message
-    memset(buffer, 0, BUFFER_SIZE);
+    printf("[+] Authenticated with the server.\n");
 
     // Send message to server
     char message[BUFFER_SIZE];
