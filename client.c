@@ -86,18 +86,34 @@ int main() {
 
     printf("[+] Authenticated with the server.\n");
 
-    // Send message to server
-    char message[BUFFER_SIZE];
-    printf("Enter message to send: ");
-    fgets(message, sizeof(message), stdin);
-    enc_len = aes_encrypt((unsigned char *)message, strlen(message), encrypted);
-    send(sock, encrypted, enc_len, 0);
+    
+    while (1) {
+        char message[BUFFER_SIZE];
+        printf("Enter message to send (or type 'exit' to quit): ");
+        fgets(message, sizeof(message), stdin);
+        
+        message[strcspn(message, "\n")] = 0;
 
-    // Receive response from server
-    int response_len = read(sock, buffer, BUFFER_SIZE);
-    dec_len = aes_decrypt((unsigned char *)buffer, response_len, (unsigned char *)buffer);
-    buffer[dec_len] = '\0';
-    printf("Server: %s\n", buffer);
+        if (strcmp(message, "exit") == 0) {
+            break;
+        }
+
+        enc_len = aes_encrypt((unsigned char *)message, strlen(message), encrypted);
+        send(sock, encrypted, enc_len, 0);
+
+        memset(buffer, 0, BUFFER_SIZE); 
+        
+        int response_len = read(sock, buffer, BUFFER_SIZE);
+        
+        if (response_len <= 0) {
+            printf("[-] Server disconnected.\n");
+            break;
+        }
+        
+        dec_len = aes_decrypt((unsigned char *)buffer, response_len, (unsigned char *)buffer);
+        buffer[dec_len] = '\0';
+        printf("Server: %s\n", buffer);
+    }
 
     // Close socket
     close(sock);
