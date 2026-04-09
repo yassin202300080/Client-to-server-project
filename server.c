@@ -52,6 +52,7 @@ int authenticate(const char *user, const char *pass) {
 
 void *client_handler(void *arg) {
     int client_sock = (int)(intptr_t)arg;
+    unsigned long thread_id = (unsigned long)pthread_self();
     char buffer[BUFFER_SIZE] = {0};
     unsigned char encrypted[BUFFER_SIZE];
 
@@ -71,11 +72,12 @@ void *client_handler(void *arg) {
         char fail[] = "AUTH_FAIL";
         int enc_len = aes_encrypt((unsigned char*)fail, strlen(fail), encrypted);
         send(client_sock, encrypted, enc_len, 0);
+        printf("[thread %lu] authentication failed for %s\n", thread_id, user);
         close(client_sock);
         return NULL;
     }
 
-    printf("[+] Authenticated: %s\n", user);
+    printf("[thread %lu] [+] Authenticated: %s\n", thread_id, user);
     char ok[] = "AUTH_OK";
     int enc_len = aes_encrypt((unsigned char*)ok, strlen(ok), encrypted);
     send(client_sock, encrypted, enc_len, 0);
@@ -84,19 +86,19 @@ void *client_handler(void *arg) {
         memset(buffer, 0, BUFFER_SIZE);
         int msg_len = recv(client_sock, buffer, BUFFER_SIZE, 0);
         if (msg_len <= 0) {
-            printf("[-] %s disconnected\n", user);
             break;
         }
         dec_len = aes_decrypt((unsigned char*)buffer, msg_len, (unsigned char*)buffer);
         buffer[dec_len] = '\0';
-        printf("%s: %s\n", user, buffer);
+        printf("[thread %lu] %s: %s\n", thread_id, user, buffer);
 
        
         char reply[BUFFER_SIZE];
-        snprintf(reply, sizeof(reply), "Server received: %s", buffer);
+        snprintf(reply, sizeof(reply), "Server received: %.1006s", buffer);
         enc_len = aes_encrypt((unsigned char*)reply, strlen(reply), encrypted);
         send(client_sock, encrypted, enc_len, 0);
     }
+    printf("[thread %lu] [-] %s disconnected\n", thread_id, user);
     close(client_sock);
     return NULL;
 }
