@@ -19,6 +19,7 @@ int aes_encrypt(unsigned char *plaintext, int plain_len, unsigned char *cipherte
     EVP_EncryptFinal_ex(ctx, ciphertext + len, &len);
     cipher_len += len;
     EVP_CIPHER_CTX_free(ctx);
+    printf("[AES] encrypted %d bytes\n", plain_len);
     return cipher_len;
 }
 
@@ -31,6 +32,7 @@ int aes_decrypt(unsigned char *ciphertext, int cipher_len, unsigned char *plaint
     EVP_DecryptFinal_ex(ctx, plaintext + len, &len);
     plain_len += len;
     EVP_CIPHER_CTX_free(ctx);
+    printf("[AES] decrypted %d bytes\n", cipher_len);
     return plain_len;
 }
 

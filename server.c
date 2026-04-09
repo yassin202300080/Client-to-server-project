@@ -20,6 +20,7 @@ int aes_encrypt(unsigned char *plain, int plain_len, unsigned char *cipher) {
     EVP_EncryptFinal_ex(ctx, cipher + len, &len);
     cipher_len += len;
     EVP_CIPHER_CTX_free(ctx);
+    printf("[AES] encrypted %d bytes\n", plain_len);
     return cipher_len;
 }
 
@@ -32,6 +33,7 @@ int aes_decrypt(unsigned char *cipher, int cipher_len, unsigned char *plain) {
     EVP_DecryptFinal_ex(ctx, plain + len, &len);
     plain_len += len;
     EVP_CIPHER_CTX_free(ctx);
+    printf("[AES] decrypted %d bytes\n", cipher_len);
     return plain_len;
 }
 
@@ -54,7 +56,7 @@ void *client_handler(void *arg) {
     unsigned char encrypted[BUFFER_SIZE];
 
 
-    int auth_len = read(client_sock, buffer, BUFFER_SIZE);
+    int auth_len = recv(client_sock, buffer, BUFFER_SIZE, 0);
     if (auth_len <= 0) {
         close(client_sock);
         return NULL;
@@ -80,7 +82,7 @@ void *client_handler(void *arg) {
 
     while (1) {
         memset(buffer, 0, BUFFER_SIZE);
-        int msg_len = read(client_sock, buffer, BUFFER_SIZE);
+        int msg_len = recv(client_sock, buffer, BUFFER_SIZE, 0);
         if (msg_len <= 0) {
             printf("[-] %s disconnected\n", user);
             break;
