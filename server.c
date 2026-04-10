@@ -11,6 +11,8 @@
 #define KEY "1234567890123456"
 #define IV  "1234567890123456"
 
+typedef enum { ENTRY, MEDIUM, TOP } role_t;
+
 int aes_encrypt(unsigned char *plain, int plain_len, unsigned char *cipher) {
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, KEY, IV);
@@ -37,12 +39,18 @@ int aes_decrypt(unsigned char *cipher, int cipher_len, unsigned char *plain) {
     return plain_len;
 }
 
-int authenticate(const char *user, const char *pass) {
+int authenticate(const char *user, const char *pass, role_t *role) {
     FILE *f = fopen("users.txt", "r");
     if (!f) return 0;
-    char u[50], p[50];
-    while (fscanf(f, "%49s %49s", u, p) == 2)
+    char u[50], p[50], r[10];
+    while (fscanf(f, "%49s %49s %9s", u, p, r) == 3)
         if (strcmp(user, u) == 0 && strcmp(pass, p) == 0) {
+
+            // role
+            if (strcmp(r, "Top") == 0) *role = TOP;
+            else if (strcmp(r, "Medium") == 0) *role = MEDIUM;
+            else *role = ENTRY;
+            
             fclose(f);
             return 1;
         }

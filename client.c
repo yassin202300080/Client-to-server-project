@@ -91,7 +91,7 @@ int main() {
     
     while (1) {
         char message[BUFFER_SIZE];
-        printf("Enter message to send (or type 'exit' to quit): ");
+        printf("Enter message to send");
         fgets(message, sizeof(message), stdin);
         
         message[strcspn(message, "\n")] = 0;
