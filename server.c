@@ -58,23 +58,28 @@ int authenticate(const char *user, const char *pass, role_t *role) {
     return 0;
 }
 
-void *client_handler(void *arg) {
-    int client_sock = (int)(intptr_t)arg;
-    unsigned long thread_id = (unsigned long)pthread_self();
-    char buffer[BUFFER_SIZE] = {0};
-    unsigned char encrypted[BUFFER_SIZE];
-
-
-    int auth_len = recv(client_sock, buffer, BUFFER_SIZE, 0);
-    if (auth_len <= 0) {
-        close(client_sock);
-        return NULL;
+void process_command(char *cmd, char *arg, role_t user_level, char *response) {
+    if (strcmp(cmd, "ls") == 0 || strcmp(cmd, "cat") == 0) {
+        sprintf(response, "Command '%s' allowed file reading", cmd);
     }
-    int dec_len = aes_decrypt((unsigned char*)buffer, auth_len, (unsigned char*)buffer);
-    buffer[dec_len] = '\0';
-
-    char user[50], pass[50];
-    sscanf(buffer, "%49[^:]:%49s", user, pass);
+    else if (strcmp(cmd, "edit") == 0) {
+        if (user_level < MEDIUM) {
+            sprintf(response, "Access denied need to be Medium level to edit files.");
+        } else {
+            sprintf(response, "Command '%s' allowed.", cmd);
+        }
+    }
+    else if (strcmp(cmd, "delete") == 0 || strcmp(cmd, "upload") == 0 || strcmp(cmd, "download") == 0) {
+        if (user_level != TOP) {
+            sprintf(response, "Access denied top level can delete, upload or download.");
+        } else {
+            sprintf(response, "Command '%s' allowed", cmd);
+        }
+    }
+    else {
+        sprintf(response, "unrecognized command try ls, cat, edit, delete, upload, download.");
+    }
+}
 
     if (!authenticate(user, pass)) {
         char fail[] = "AUTH_FAIL";
