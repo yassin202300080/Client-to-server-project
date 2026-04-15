@@ -62,9 +62,9 @@ void process_command(char *cmd, char *arg, role_t user_level, char *response) {
     if (strcmp(cmd, "ls") == 0 || strcmp(cmd, "cat") == 0) {
         sprintf(response, "Command '%s' allowed file reading", cmd);
     }
-    else if (strcmp(cmd, "edit") == 0) {
+     else if (strcmp(cmd, "edit") == 0 || strcmp(cmd, "copy") == 0) {
         if (user_level < MEDIUM) {
-            sprintf(response, "Access denied need to be Medium level to edit files.");
+            sprintf(response, "Access denied need to be Medium level to edit or copy files.");
         } else {
             sprintf(response, "Command '%s' allowed.", cmd);
         }
@@ -77,7 +77,7 @@ void process_command(char *cmd, char *arg, role_t user_level, char *response) {
         }
     }
     else {
-        sprintf(response, "unrecognized command try ls, cat, edit, delete, upload, download.");
+        sprintf(response, "unrecognized command try ls, cat, edit, delete, upload, download or copy.");
     }
 }
 
