@@ -87,7 +87,20 @@ void *client_handler(void *arg) {
     char buffer[BUFFER_SIZE] = {0};
     unsigned char encrypted[BUFFER_SIZE];
 
-    if (!authenticate(user, pass)) {
+    role_t current_role;
+
+    int auth_len = recv(client_sock, buffer, BUFFER_SIZE, 0);
+    if (auth_len <= 0) {
+        close(client_sock);
+        return NULL;
+    }
+    int dec_len = aes_decrypt((unsigned char*)buffer, auth_len, (unsigned char*)buffer);
+    buffer[dec_len] = '\0';
+
+    char user[50], pass[50];
+    sscanf(buffer, "%49[^:]:%49s", user, pass);
+
+    if (!authenticate(user, pass, &current_role)) {
         char fail[] = "AUTH_FAIL";
         int enc_len = aes_encrypt((unsigned char*)fail, strlen(fail), encrypted);
         send(client_sock, encrypted, enc_len, 0);
