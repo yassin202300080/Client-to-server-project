@@ -81,6 +81,12 @@ void process_command(char *cmd, char *arg, role_t user_level, char *response) {
     }
 }
 
+void *client_handler(void *arg) {
+    int client_sock = (int)(intptr_t)arg;
+    unsigned long thread_id = (unsigned long)pthread_self();
+    char buffer[BUFFER_SIZE] = {0};
+    unsigned char encrypted[BUFFER_SIZE];
+
     if (!authenticate(user, pass)) {
         char fail[] = "AUTH_FAIL";
         int enc_len = aes_encrypt((unsigned char*)fail, strlen(fail), encrypted);
