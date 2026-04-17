@@ -6,7 +6,7 @@
 #include <openssl/evp.h>
 
 #define PORT 8080
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 #define KEY "1234567890123456"
 #define IV  "1234567890123456"
 
@@ -34,6 +34,67 @@ int aes_decrypt(unsigned char *ciphertext, int cipher_len, unsigned char *plaint
     EVP_CIPHER_CTX_free(ctx);
     printf("[AES] decrypted %d bytes\n", cipher_len);
     return plain_len;
+}
+
+void upload_file(int sock, const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+    if (!fp) {
+        printf("File not found.\n");
+        return;
+    }
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    char ok[BUFFER_SIZE];
+    snprintf(ok, sizeof(ok), "OK %ld", size);
+    unsigned char enc[BUFFER_SIZE];
+    int len = aes_encrypt((unsigned char*)ok, strlen(ok), enc);
+    send(sock, enc, len, 0);
+    unsigned char buf[BUFFER_SIZE], ec[BUFFER_SIZE];
+    while ((len = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        len = aes_encrypt(buf, len, ec);
+        send(sock, ec, len, 0);
+    }
+    fclose(fp);
+    
+    // response 
+    char resp[BUFFER_SIZE];
+    len = recv(sock, resp, BUFFER_SIZE, 0);
+    printf("[DEBUG] upload response len=%d\n", len);
+    if (len > 0) {
+        len = aes_decrypt((unsigned char*)resp, len, (unsigned char*)resp);
+        resp[len] = '\0';
+        printf("%s\n", resp);
+    }
+}
+
+void download_file(int sock, const char *filename) {
+    char resp[BUFFER_SIZE];
+    int len = recv(sock, resp, BUFFER_SIZE, 0);
+    if (len <= 0) return;
+    len = aes_decrypt((unsigned char*)resp, len, (unsigned char*)resp);
+    resp[len] = '\0';
+    if (strncmp(resp, "OK", 2) != 0) {
+        printf("%s\n", resp);
+        return;
+    }
+    long size;
+    sscanf(resp, "OK %ld", &size);
+    FILE *fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Cannot create file\n");
+        return;
+    }
+    long received = 0;
+    while (received < size) {
+        len = recv(sock, resp, BUFFER_SIZE, 0);
+        if (len <= 0) break;
+        len = aes_decrypt((unsigned char*)resp, len, (unsigned char*)resp);
+        fwrite(resp, 1, len, fp);
+        received += len;
+    }
+    fclose(fp);
+    printf("Downloaded %s (%ld bytes)\n", filename, size);
 }
 
 int main() {
@@ -70,7 +131,6 @@ int main() {
     scanf("%49s", password);
 
     getchar(); 
-// Combine username and password into a single string and encrypt it before sending to the server
     snprintf(credentials, sizeof(credentials), "%s:%s", username, password);
     int enc_len = aes_encrypt((unsigned char *)credentials, strlen(credentials), encrypted);
     send(sock, encrypted, enc_len, 0);
@@ -91,34 +151,42 @@ int main() {
     
     while (1) {
         char message[BUFFER_SIZE];
-        printf("Enter message to send");
+        printf("Enter message ");
         fgets(message, sizeof(message), stdin);
-        
         message[strcspn(message, "\n")] = 0;
+    if (strcmp(message, "exit") == 0) break;
 
-        if (strcmp(message, "exit") == 0) {
-            break;
-        }
+    char cmd[50], arg[BUFFER_SIZE];
+    sscanf(message, "%49s %[^\n]", cmd, arg);
 
-        enc_len = aes_encrypt((unsigned char *)message, strlen(message), encrypted);
+    if (strcmp(cmd, "upload") == 0 && strlen(arg) > 0) {
+        
+        enc_len = aes_encrypt((unsigned char*)message, strlen(message), encrypted);
         send(sock, encrypted, enc_len, 0);
-
-        memset(buffer, 0, BUFFER_SIZE); 
+        upload_file(sock, arg);
+        continue;
+    }
+    else if (strcmp(cmd, "download") == 0 && strlen(arg) > 0) {
+        enc_len = aes_encrypt((unsigned char*)message, strlen(message), encrypted);
+        send(sock, encrypted, enc_len, 0);
+        download_file(sock, arg);
+        continue;
+    }
+    else {
         
+        enc_len = aes_encrypt((unsigned char*)message, strlen(message), encrypted);
+        send(sock, encrypted, enc_len, 0);
+        memset(buffer, 0, BUFFER_SIZE);
         int response_len = read(sock, buffer, BUFFER_SIZE);
-        
         if (response_len <= 0) {
-            printf("[-] Server disconnected.\n");
+            printf("Server disconnected.\n");
             break;
         }
-        
-        dec_len = aes_decrypt((unsigned char *)buffer, response_len, (unsigned char *)buffer);
+        dec_len = aes_decrypt((unsigned char*)buffer, response_len, (unsigned char*)buffer);
         buffer[dec_len] = '\0';
-        printf("Server: %s\n", buffer);
+        printf("%s\n", buffer);
     }
-
-    // Close socket
+    }
     close(sock);
-
     return 0;
 }
